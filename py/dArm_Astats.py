@@ -16,9 +16,13 @@ import matplotlib.gridspec as gridspec
 from scipy import stats
 from galpy.util import bovy_coords
 from galpy.util import bovy_plot
+from mpi4py import MPI
+
+comm=MPI.COMM_WORLD
+nprocs=comm.Get_size()
+myrank=comm.Get_rank()
 
 # define position of arm
-
 
 def funcdarm2(x, armp, xposp, yposp):
     # Arm parameters
@@ -46,8 +50,9 @@ def distarm(tanpa, angref, rref, xpos, ypos):
         res = minimize_scalar(funcdarm2, args=(armp, xpos[i], ypos[i]), bounds=(
             0.0, 1.5 * np.pi), method='bounded')
         if res.success == False:
-            print ' no minimize result at i,x,y=', i, xpos[i], ypos[i]
-            print ' res=', res
+            if myrank==0:
+                print ' no minimize result at i,x,y=', i, xpos[i], ypos[i]
+                print ' res=', res
         darm[i] = np.sqrt(res.fun)
         angmin[i] = res.x
 
@@ -87,13 +92,15 @@ MCsample_vgalp = True
 if MCsample_vgalp == True:
     MCsample_v = True
 
-print ' MCsample_v, MCsample_vgalp=', MCsample_v, MCsample_vgalp
+if myrank == 0:
+    print ' MCsample_v, MCsample_vgalp=', MCsample_v, MCsample_vgalp
 
 # Reid et al. (2014)'s Galactic parameters
 # Sun's position
 rsunr14 = 8.34
 
-print ' Rsun in Reid et al. (2014)=', rsunr14
+if myrank == 0:
+    print ' Rsun in Reid et al. (2014)=', rsunr14
 
 # Galactic parameters and uncertainties
 # Bland-Hawthorn & Gerhard (2016)
@@ -165,7 +172,8 @@ glonv = star['GLON_true'][sindx]
 glatv = star['GLAT_true'][sindx]
 # number of data points
 nstarv = len(glatv)
-print ' number of stars selected=', nstarv
+if myrank == 0:
+    print ' number of stars selected=', nstarv
 plxv = star['Plx_obs'][sindx]
 errplxv = star['e_Plx'][sindx]
 distv = 1.0/plxv
@@ -235,11 +243,12 @@ tanpa = np.tan(9.4 * np.pi / 180.0)
 
 # MC error sampling
 nmc = 10000
-nmc = 1000
+nmc = 100
 if MCsample_v == False and MCsample_vgalp == False:
     nmc = 1
 
-print ' nmc=', nmc
+if myrank == 0:
+    print ' nmc=', nmc
 
 # sample from parallax, proper-motion covariance matrix
 if MCsample_v == True:
@@ -277,7 +286,8 @@ if MCsample_v == True:
     copysamflat=np.copy(plxv_samflat)
     plxlim=0.001
     if len(copysamflat[plxv_samflat<plxlim])>0: 
-      print len(copysamflat[plxv_samflat<plxlim]),' plx set to ',plxlim
+        if myrank == 0: 
+            print len(copysamflat[plxv_samflat<plxlim]),' plx set to ',plxlim
     plxv_samflat[copysamflat<plxlim]=plxlim
     plxv_sam = np.reshape(plxv_samflat,(nmc,nstarv))
     # distance
@@ -376,10 +386,12 @@ else:
 # x,y arm ref position w.r.t. the Sun in Reid et al. (2014)
 xarms = rrefr14 * np.cos(angrefr14) + rsunr14
 yarms = rrefr14 * np.sin(angrefr14)
-print ' arm reference x,y position w.r.t. the Sun=', xarms, yarms, np.arcsin(yarms / rrefr14)
+if myrank == 0:
+    print ' arm reference x,y position w.r.t. the Sun=', xarms, yarms, np.arcsin(yarms / rrefr14)
 rref_mean = np.sqrt(yarms**2 + (xarms - rsun)**2)
 angref_mean = np.pi - np.arcsin(yarms / rref_mean)
-print ' Rref and angref (mean)=', rref_mean, 180.0 - angref_mean * 180.0 / np.pi
+if myrank == 0:
+    print ' Rref and angref (mean)=', rref_mean, 180.0 - angref_mean * 180.0 / np.pi
 # new angref and Ref
 rref_sam = np.sqrt(yarms**2 + (xarms - rsun_sam)**2)
 angref_sam = np.pi - np.arcsin(yarms / rref_sam)
@@ -387,11 +399,42 @@ angref_sam = np.pi - np.arcsin(yarms / rref_sam)
 # for i in range(nmc):
 #  print ' Rref,Angrefr14,Rsam,Angsam0,1=',rrefr14,angrefr14,rref_sam[i,0] \
 #   ,angref_sam[i,0],rref_sam[i,1],angref_sam[i,1]
-darmv_sam = np.zeros_like(xposv_sam.flatten())
-angarmv_sam = np.zeros_like(xposv_sam.flatten())
-darmv_sam, angarmv_sam = distarm(np.tile(tanpa, (nmc, nstarv)).flatten(
-), angref_sam.flatten(), rref_sam.flatten(), xposv_sam.flatten(), yposv_sam.flatten())
-print ' dist arm finished'
+
+
+# Serial version
+# 
+# darmv_sam = np.zeros_like(xposv_sam.flatten())
+# angarmv_sam = np.zeros_like(xposv_sam.flatten())
+#
+# darmv_sam, angarmv_sam = distarm(np.tile(tanpa, (nmc, nstarv)).flatten(), angref_sam.flatten(), rref_sam.flatten(), xposv_sam.flatten(), yposv_sam.flatten())
+
+darmv_sam = np.zeros_like(xposv_sam)
+angarmv_sam = np.zeros_like(xposv_sam)
+
+for j in range(myrank,nstarv,nprocs):
+    darmv_sam[:,j], angarmv_sam[:,j] = distarm(np.tile(tanpa,nmc), angref_sam[:,j], rref_sam[:,j], xposv_sam[:,j], yposv_sam[:,j])
+
+darmv_samfl = darmv_sam.flatten()
+angarmv_samfl = angarmv_sam.flatten()
+
+# MPI
+ncom = len(darmv_samfl)
+sendbuf = np.zeros(ncom,dtype=np.float64)
+# darmv
+sendbuf = darmv_samfl
+recvbuf = np.zeros(ncom,dtype=np.float64)
+comm.Allreduce(sendbuf,recvbuf,op=MPI.SUM)
+darmv_samfl = recvbuf
+darmv_sam = np.reshape(darmv_samfl,(nmc,nstarv))
+# angarmv
+sendbuf = angarmv_samfl
+recvbuf = np.zeros(ncom,dtype=np.float64)
+comm.Allreduce(sendbuf,recvbuf,op=MPI.SUM)
+angarmv_samfl = recvbuf
+angarmv_sam = np.reshape(angarmv_samfl,(nmc,nstarv))
+
+if myrank == 0: 
+    print ' dist arm finished'
 # reshape
 darmv_sam = darmv_sam.reshape((nmc, nstarv))
 angarmv_sam = angarmv_sam.reshape((nmc, nstarv))
@@ -451,7 +494,8 @@ ncols = 3
 warm = 1.5
 sindxarm = np.where((darmv_mean > -warm) & (darmv_mean < warm))
 nswarm = np.size(sindxarm)
-print ' sindxarm=', nswarm
+if myrank == 0:
+    print ' sindxarm=', nswarm
 uradwarm_sam = -vradv_sam[:, sindxarm].reshape(nmc, nswarm)
 vrotwarm_sam = vrotv_sam[:, sindxarm].reshape(nmc, nswarm)
 darmwarm_sam = darmv_sam[:, sindxarm].reshape(nmc, nswarm)
@@ -460,7 +504,8 @@ angdiffwarm_sam = angdiffarmv_sam[:, sindxarm].reshape(nmc, nswarm)
 
 # mean value
 
-print ' number of stars selected from d_mean<', warm, '=', nswarm
+if myrank == 0:
+    print ' number of stars selected from d_mean<', warm, '=', nswarm
 uradwarm_mean = np.mean(uradwarm_sam, axis=0).reshape(nswarm)
 vrotwarm_mean = np.mean(vrotwarm_sam, axis=0).reshape(nswarm)
 darmwarm_mean = np.mean(darmwarm_sam, axis=0).reshape(nswarm)
@@ -478,16 +523,17 @@ yposwarm = yposv[sindxarm]
 glonwarm = glonv[sindxarm]
 glatwarm = glatv[sindxarm]
 # output
-f = open('CephmeanV_darm.asc', 'w')
-print >>f, "# x y darm darm_sig Umean Usig Vmean Vsig darm_theta darm_theta_sig thetaarm thetaarm_sig Glon Glat"
-for i in range(nswarm):
-    print >>f, "%f %f %f %f %f %f %f %f %f %f %f %f %f %f" % (
-        xposwarm[i], yposwarm[i], darmwarm_mean[i], darmwarm_std[i], uradwarm_mean[i], \
-        uradwarm_std[i], vrotwarm_mean[i], vrotwarm_std[i], \
-        dangdiffwarm_mean[i],dangdiffwarm_std[i],angdiffwarm_mean[i],angdiffwarm_std[i], \
-        glonwarm[i],glatwarm[i])
-f.close()
-
+if myrank == 0:
+    f = open('Gaia-LAMOST-Astars-V_darm.asc', 'w')
+    print >>f, "# x y darm darm_sig Umean Usig Vmean Vsig darm_theta darm_theta_sig thetaarm thetaarm_sig Glon Glat"
+    for i in range(nswarm):
+        print >>f, "%f %f %f %f %f %f %f %f %f %f %f %f %f %f" % (
+            xposwarm[i], yposwarm[i], darmwarm_mean[i], \
+            darmwarm_std[i], uradwarm_mean[i], uradwarm_std[i], \
+            vrotwarm_mean[i], vrotwarm_std[i], dangdiffwarm_mean[i], \
+            dangdiffwarm_std[i], angdiffwarm_mean[i], angdiffwarm_std[i], \
+            glonwarm[i],glatwarm[i])
+    f.close()
 
 # computing correlation coefficients
 ucorrcoef = np.zeros(nmc)
@@ -496,8 +542,9 @@ for i in range(nmc):
     ucorrcoef[i] = np.corrcoef(darmwarm_sam[i, :], uradwarm_sam[i, :])[0, 1]
     vcorrcoef[i] = np.corrcoef(darmwarm_sam[i, :], vrotwarm_sam[i, :])[0, 1]
 
-print ' U corrcoef med,mean,sig=', np.median(ucorrcoef), np.mean(ucorrcoef), np.std(ucorrcoef)
-print ' V corrcoef med,mean,sig=', np.median(vcorrcoef), np.mean(vcorrcoef), np.std(vcorrcoef)
+if myrank == 0:
+    print ' U corrcoef med,mean,sig=', np.median(ucorrcoef), np.mean(ucorrcoef), np.std(ucorrcoef)
+    print ' V corrcoef med,mean,sig=', np.median(vcorrcoef), np.mean(vcorrcoef), np.std(vcorrcoef)
 
 # plot d vs. U
 plt.subplot(nrows, ncols, 1)
@@ -530,12 +577,16 @@ dtrailmin = 0.2
 sindxlead = np.where((darmv_mean > dleadmin) & (darmv_mean < dleadmax))
 sindxtrail = np.where((darmv_mean > dtrailmin) & (darmv_mean < dtrailmax))
 
-print ' Leading d range min,max=', dleadmin, dleadmax
-print ' Trailing d range min,max=', dleadmin, dleadmax
+if myrank == 0:
+    print ' Leading d range min,max=', dleadmin, dleadmax
+    print ' Trailing d range min,max=', dleadmin, dleadmax
+
 nlead = np.size(sindxlead)
 ntrail = np.size(sindxtrail)
-print ' numper of stars leading=', nlead
-print ' numper of stars trailing=', ntrail
+
+if myrank == 0:
+    print ' numper of stars leading=', nlead
+    print ' numper of stars trailing=', ntrail
 
 # U is positive toward centre
 uradl_sam = -vradv_sam[:, sindxlead].reshape(nmc, nlead)
@@ -555,16 +606,17 @@ vrotl_median_sam = np.median(vrotl_sam, axis=1)
 vrott_median_sam = np.median(vrott_sam, axis=1)
 
 # taking statistical mean and dispersion
-print '### Statistical mean and dispersion for Mean'
-print ' Leading U mean,sig=', np.mean(uradl_mean_sam), np.std(uradl_mean_sam)
-print ' Trailing U mean,mean,sig=', np.mean(uradt_mean_sam), np.std(uradt_mean_sam)
-print ' Leading V mean,sig=', np.mean(vrotl_mean_sam), np.std(vrotl_mean_sam)
-print ' Trailing V mean,sig=', np.mean(vrott_mean_sam), np.std(vrott_mean_sam)
-print '### Statistical mean and dispersion for Median'
-print ' Leading U mean,sig=', np.mean(uradl_median_sam), np.std(uradl_median_sam)
-print ' Trailing U mean,mean,sig=', np.mean(uradt_median_sam), np.std(uradt_median_sam)
-print ' Leading V mean,sig=', np.mean(vrotl_median_sam), np.std(vrotl_median_sam)
-print ' Trailing V mean,sig=', np.mean(vrott_median_sam), np.std(vrott_median_sam)
+if myrank == 0:
+    print '### Statistical mean and dispersion for Mean'
+    print ' Leading U mean,sig=', np.mean(uradl_mean_sam), np.std(uradl_mean_sam)
+    print ' Trailing U mean,mean,sig=', np.mean(uradt_mean_sam), np.std(uradt_mean_sam)
+    print ' Leading V mean,sig=', np.mean(vrotl_mean_sam), np.std(vrotl_mean_sam)
+    print ' Trailing V mean,sig=', np.mean(vrott_mean_sam), np.std(vrott_mean_sam)
+    print '### Statistical mean and dispersion for Median'
+    print ' Leading U mean,sig=', np.mean(uradl_median_sam), np.std(uradl_median_sam)
+    print ' Trailing U mean,mean,sig=', np.mean(uradt_median_sam), np.std(uradt_median_sam)
+    print ' Leading V mean,sig=', np.mean(vrotl_median_sam), np.std(vrotl_median_sam)
+    print ' Trailing V mean,sig=', np.mean(vrott_median_sam), np.std(vrott_median_sam)
 
 # vertex deviation
 # covariance of leading part
@@ -578,7 +630,9 @@ for i in range(nmc):
     lvl_sam[i] = (180.0 / np.pi) * 0.5 * np.arctan(2.0 * vcovl[0, 1]
                                                    / (vcovl[0, 0] - vcovl[1, 1]))
     if vcovl[1, 1] > vcovl[0, 0]:
-        print i, ' MC leading sigU>sigR,lv,sig_RV=', vcovl[0, 0], vcovl[1, 1], lvl_sam[i], vcovl[0, 1]
+        if myrank == 0:
+            print i, ' MC leading sigU>sigR,lv,sig_RV=', \
+                vcovl[0, 0], vcovl[1, 1], lvl_sam[i], vcovl[0, 1]
 # Vorobyov & Theis (2006), under eq. 18
         lvl_sam[i] = lvl_sam[i] + 90.0 * np.sign(vcovl[0, 1])
         print ' lv changed to ', lvl_sam[i]
@@ -587,9 +641,10 @@ for i in range(nmc):
 #  print >>f,"%d %f %f %f %f" %(i,lvl_sam[i],vcovl[0,0],vcovl[1,1],vcovl[0,1])
 # f.close()
 
-
-print '### Vertex deviation'
-print ' Leading vertex deviation mean,sig=', np.mean(lvl_sam), np.std(lvl_sam)
+if myrank == 0:
+    print '### Vertex deviation'
+    print ' Leading vertex deviation mean,sig=', np.mean(lvl_sam), \
+        np.std(lvl_sam)
 
 # trailing part
 lvt_sam = np.zeros(nmc)
@@ -599,12 +654,14 @@ for i in range(nmc):
     lvt_sam[i] = (180.0 / np.pi) * 0.5 * np.arctan(2.0 * vcovt[0, 1]
                                                    / (vcovt[0, 0] - vcovt[1, 1]))
     if vcovl[1, 1] > vcovl[0, 0]:
-        print i, ' MC trailing sigU>sigR,lv=', vcovl[0, 0], vcovl[1, 1], lvt_sam[i]
+#        print i, ' MC trailing sigU>sigR,lv=', vcovl[0, 0], vcovl[1, 1], lvt_sam[i]
 # Vorobyov & Theis (2006), under eq. 18
         lvl_sam[i] = lvl_sam[i] + 90.0 * np.sign(vcovl[0, 1])
-        print ' lv changed to ', lvl_sam[i]
+#        print ' lv changed to ', lvl_sam[i]
 
-print ' Trailing vertex deviation mean,sig=', np.mean(lvt_sam), np.std(lvt_sam)
+if myrank == 0:
+    print ' Trailing vertex deviation mean,sig=', np.mean(lvt_sam), \
+        np.std(lvt_sam)
 
 # bottom panel
 # U hist
@@ -735,10 +792,11 @@ while isp < numsp:
         plt.plot(xsp, ysp, 'r-')
     else:
         plt.plot(xsp, ysp, 'g-')
-        f = open('PerseusArm.asc', 'w')
-        for i in range(nsp):
-            print >>f, "%f %f" % (xsp[i], ysp[i])
-        f.close()
+        if myrank == 0:
+            f = open('PerseusArm.asc', 'w')
+            for i in range(nsp):
+                print >>f, "%f %f" % (xsp[i], ysp[i])
+            f.close()
     isp += 1
 
 # velocity arrow
@@ -760,3 +818,5 @@ cbar.set_label(r'$\delta$[Fe/H]')
 plt.xticks(fontsize=18)
 plt.yticks(fontsize=18)
 plt.show()
+
+comm.Disconnect()
