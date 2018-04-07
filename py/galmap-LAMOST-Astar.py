@@ -1,6 +1,7 @@
 
 # 1. Read /Users/dkawata/work/obs/LAMOST/DR3/dr3_stellar.fits
-# 2. Plot x-y distribution 
+# 2. output sels_rv.asc for gcdp-ana/lbsels.dat for mock data generation
+# 3. Plot x-y distribution 
 #
 # History:
 #  29/03/2018  Written - Daisuke Kawata
@@ -38,35 +39,38 @@ star_hdus.close()
 print 'number of stars read =',len(star['obsid'])
 
 # select stas with teff and logg
+# Galactic coordinates
+Tllbb=bovy_coords.radec_to_lb(star['ra'],star['dec'],degree=True,epoch=2000.0)
+glon=Tllbb[:,0]
+glat=Tllbb[:,1]
+
 sindx=np.where((star['teff']>7330.0) & (star['teff']<8040.0) \
                & (star['logg']>3.2) \
                & (star['Vmag']>0.0) & (star['Bmag']>0.0) \
-               & (star['rv_err']>0.0) & (star['rv_err']<10.0))
+               & (star['rv_err']>0.0) & (star['rv_err']<10.0) \
+               & (glon>140.0) & (glon<220.0))
+#               & (glon>175.0) & (glon<185.0))
+
 nstars=len(star['ra'][sindx])
 print ' N selected=',nstars
 # extract the necessary particle info
 ra_s=star['ra'][sindx]
 dec_s=star['dec'][sindx]
 teff_s=star['teff'][sindx]
+logg_s=star['logg'][sindx]
 # from APASS DR9
 vmag_s=star['Vmag'][sindx]
 bmag_s=star['Bmag'][sindx]
 feh_s=star['feh'][sindx]
 rv_s=star['rv'][sindx]
 rverr_s=star['rv_err'][sindx]
-
-# Galactic coordinates
-Tllbb=bovy_coords.radec_to_lb(ra_s,dec_s,degree=True,epoch=2000.0)
-glon_s=Tllbb[:,0]
-glat_s=Tllbb[:,1]
+glon_s=glon[sindx]
+glat_s=glat[sindx]
 
 # absolute R mag
 mvmag_s=np.interp(teff_s,teffmv,mvmag)
 # extinction
 combined=mwdust.Combined15(filter='CTIO V')
-for i in range(10):
-  diste=i
-  print i,' kpc Av=',combined(68.74,-32.56,diste)
 avmag=np.zeros_like(glon_s)
 mod0_s=vmag_s-mvmag_s+avmag
 dist0_s=np.power(10.0,(mod0_s+5.0)/5.0)*0.001
@@ -78,6 +82,7 @@ for i in range(0):
   # calculate extinction
   for j in range(len(glon_s)):
     avmag[j]=combined(glon_s[j],glat_s[j],dist_s[j])
+  print ' mwdust iteration ',i,' finished'
 
 # photometry V and V-I
 # dwarf http://www.pas.rochester.edu/~emamajek/EEM_dwarf_UBVIJHK_colors_Teff.txt
@@ -96,7 +101,7 @@ xsun=-8.1
 # Sun's proper motion Schoenrich et al.
 usun=11.1
 vsun=12.24
-zsun=7.25
+wsun=7.25
 # circular velocity
 # Jo Bovy's suggestion
 vcirc=30.24*np.abs(xsun)-vsun
@@ -126,23 +131,40 @@ for i in range(nstars):
       ,feh_s[i],delfeh_s[i],glon_s[i],glat_s[i],dist_s[i],dist0_s[i] \
       ,avmag[i],bmag_s[i],vmag_s[i],vicol_s[i])
 f.close()
+
+# selecting the stars with z and Glon
+# 3.75 kpc  15% plx accuracy with 0.04 mas plx error. 
+distlim=3.75
+sindxz=np.where((np.fabs(zpos_s)<0.5) & (dist_s<distlim))
+nsels=len(rgal_s[sindxz])
+print 'N stars(|z|<0.5 & d<',distlim,' kpc)=',nsels
+
+# use position from the Sun
+xsels=xpos_s[sindxz]-xsun
+ysels=ypos_s[sindxz]
+zsels=zpos_s[sindxz]
+rvsels=rv_s[sindxz]
+rverrsels=rverr_s[sindxz]
+vmagsels=vmag_s[sindxz]
+vicolsels=vicol_s[sindxz]
+rasels=ra_s[sindxz]
+decsels=dec_s[sindxz]
+glonsels=glon_s[sindxz]
+glatsels=glat_s[sindxz]
+distsels=dist_s[sindxz]
+teffsels=teff_s[sindxz]
+loggsels=logg_s[sindxz]
+avmagsels=avmag[sindxz]
+
 # for input of lbsels
-f=open('sels.asc','w')
-for i in range(nstars):
-  print >>f,"%12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e" \
-    %(xpos_s[i],ypos_s[i],zpos_s[i],rv_s[i],rverr_s[i] \
-      ,vmag_s[i],vicol_s[i],ra_s[i],dec_s[i],glon_s[i] \
-      ,glat_s[i],dist_s[i])
+f=open('sels_rv.asc','w')
+print >>f,"# nstar= %10d" % (nsels)
+for i in range(nsels):
+  print >>f,"%12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e" \
+    %(xsels[i],ysels[i],zsels[i],rvsels[i],rverrsels[i] \
+      ,vmagsels[i],vicolsels[i],rasels[i],decsels[i],glonsels[i] \
+      ,glatsels[i],distsels[i],teffsels[i],loggsels[i],avmagsels[i])
 f.close()
-
-# selecting the stars with z
-sindxz=np.where((np.fabs(zpos_s)<0.5) & (dist_s<3.7))
-print 'N stars(|z|<0.5 & d<3.7 kpc)=',len(rgal_s[sindxz])
-
-sindxl180=np.where((np.fabs(zpos_s)<0.5) & (dist_s<2.0) & (glon_s<220.0) & (glon_s>140.0))
-
-print ' N 140<l<220, d<2.0=',len(rv_s[sindxl180])
-print ' velocity mean and dispersion=',np.mean(rv_s[sindxl180]),np.std(rv_s[sindxl180])
 
 ### plot radial metallicity distribution
 # plot Cepheids data point
