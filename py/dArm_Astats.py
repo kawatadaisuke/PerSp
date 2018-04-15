@@ -184,9 +184,13 @@ pmrav = star['pmRA_obs'][sindx]
 pmdecv = star['pmDEC_obs'][sindx]
 errpmrav = star['e_pmRA'][sindx]
 errpmdecv = star['e_pmDEC'][sindx]
-plxpmra_corrv = star['PARALLAX_PMRA_CORR']
-plxpmdec_corrv = star['PARALLAX_PMDEC_CORR']
+plxpmra_corrv = star['PARALLAX_PMRA_CORR'][sindx]
+plxpmdec_corrv = star['PARALLAX_PMDEC_CORR'][sindx]
 pmradec_corrv = star['PMRA_PMDEC_CORR'][sindx]
+
+# error correlation check
+# plxpmra_corrv = np.ones_like(pmradec_corrv)*0.5
+# pmradec_corrv = np.ones_like(pmradec_corrv)*0.5
 
 hrvv = star['HRV_obs'][sindx]
 errhrvv = star['e_HRV'][sindx]
@@ -252,9 +256,10 @@ if myrank == 0:
 
 # sample from parallax, proper-motion covariance matrix
 if MCsample_v == True:
-    pmradec_mc = np.empty((nstarv, 2, nmc))
-    pmradec_mc[:, 0, :] = np.atleast_2d(pmrav).T
-    pmradec_mc[:, 1, :] = np.atleast_2d(pmdecv).T
+    plxpmradec_mc = np.empty((nstarv, 3, nmc))
+    plxpmradec_mc[:, 0, :] = np.atleast_2d(plxv).T
+    plxpmradec_mc[:, 1, :] = np.atleast_2d(pmrav).T
+    plxpmradec_mc[:, 2, :] = np.atleast_2d(pmdecv).T
     for ii in range(nstarv):
         # constract covariance matrix
         tcov = np.zeros((3, 3))
@@ -262,27 +267,29 @@ if MCsample_v == True:
         tcov[0, 0] = errplxv[ii]**2.0 / 2.0
         tcov[1, 1] = errpmrav[ii]**2.0 / 2.0
         tcov[2, 2] = errpmdecv[ii]**2.0 / 2.0
-        tcov[0, 1] = plxpmra_corrv[ii]**2.0 * errplxv[ii] * errpmrav[ii]
-        tcov[0, 2] = plxpmdec_corrv[ii]**2.0 * errplxv[ii] * errpmdecv[ii]
+        tcov[0, 1] = plxpmra_corrv[ii] * errplxv[ii] * errpmrav[ii]
+        tcov[0, 2] = plxpmdec_corrv[ii] * errplxv[ii] * errpmdecv[ii]
         tcov[1, 2] = pmradec_corrv[ii] * errpmrav[ii] * errpmdecv[ii]
         # symmetrise
         tcov = (tcov + tcov.T)
         # Cholesky decomp.
         L = np.linalg.cholesky(tcov)
-        pmradec_mc[ii] += np.dot(L, np.random.normal(size=(3, nmc)))[1:,:]
+        plxpmradec_mc[ii] += np.dot(L, np.random.normal(size=(3, nmc)))
 
 # distribution of velocity and distance.
 # -> pml pmb
     ratile = np.tile(rav, (nmc, 1)).flatten()
     dectile = np.tile(decv, (nmc, 1)).flatten()
-    pmllbb_sam = bovy_coords.pmrapmdec_to_pmllpmbb(pmradec_mc[:, 0, :].T.flatten(
-    ), pmradec_mc[:, 1:].T.flatten(), ratile, dectile, degree=True, epoch=2000.0)
+    pmllbb_sam = bovy_coords.pmrapmdec_to_pmllpmbb( \
+        plxpmradec_mc[:, 1, :].T.flatten(), \
+        plxpmradec_mc[:, 2, :].T.flatten(), \
+        ratile, dectile, degree=True, epoch=2000.0)
 # reshape
     pmllbb_sam = pmllbb_sam.reshape((nmc, nstarv, 2))
 # distance MC sampling
-    plxv_sam = np.random.normal(plxv, errplxv, (nmc, nstarv))
+    plxv_sam = plxpmradec_mc[:, 0, :].T
     # check negative parallax
-    plxv_samflat=plxv_sam.flatten()
+    plxv_samflat= plxv_sam.flatten()
     copysamflat=np.copy(plxv_samflat)
     plxlim=0.001
     if len(copysamflat[plxv_samflat<plxlim])>0: 
@@ -300,6 +307,15 @@ if MCsample_v == True:
 #            print >>f, "%d %d %f %f" % (i, j, plxv_sam[i, j], plxv[j])
 #        print >>fs,"%d %f %f" % (j, errplxv[j], np.std(plxv_sam[:, j]))
 #    fs.close()
+#    f.close()
+# correlation check
+#    f = open('mcsamp_plxpm10.asc', 'w')
+#    j = 10
+#    for i in range(nmc):
+#        print >>f, "%d %d %f %f %f %f %f %f" \
+#            % (i, j, plxv_sam[i, j], plxv[j], \
+#               plxpmradec_mc[j, 1, i],plxpmradec_mc[j, 2, i], \
+#               pmrav[j], pmdecv[j])
 #    f.close()
 
 # radial velocity MC sampling
