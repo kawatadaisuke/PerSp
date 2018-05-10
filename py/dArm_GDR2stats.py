@@ -617,8 +617,6 @@ else:
     angdiffarmv_std = angdiffarmv_rank_std
 
 # sampling the stars around the arm
-nrows = 3
-ncols = 3
 warm = 1.5
 sindxarm =np.where((darmv_mean > -warm) & (darmv_mean < warm))
 nswarm = np.size(sindxarm)
@@ -667,28 +665,6 @@ else:
         print ' U corrcoef =', ucorrcoef
         print ' V corrcoef =', vcorrcoef
 
-if myrank == 0:
-    # plot d vs. U
-    plt.subplot(nrows, ncols, 1)
-    plt.errorbar(darmv_mean[sindxarm], uradv_mean[sindxarm],
-        xerr=darmv_std[sindxarm], yerr=uradv_std[sindxarm], fmt='.', \
-                 marker='.', ms=0.5)
-    plt.xlabel(r"d (kpc)", fontsize=12, fontname="serif")
-    plt.ylabel(r"U (km/s)", fontsize=12, fontname="serif")
-    plt.axis([-warm, warm, -80.0, 80.0], 'scaled')
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-    # plot d vs. V
-    # plt.subplot(gs1[1])
-    plt.subplot(nrows, ncols, 2)
-    plt.errorbar(darmv_mean, vrotv_mean, \
-        xerr=darmv_std, yerr=vrotv_std, fmt='.', \
-                 marker='.', ms=0.5)
-    plt.xlabel(r"d (kpc)", fontsize=12, fontname="serif")
-    plt.ylabel(r"V (km/s)", fontsize=12, fontname="serif")
-    plt.axis([-warm, warm, -80.0, 80.0], 'scaled')
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
 
 # leading and training
 # leading and training
@@ -890,9 +866,31 @@ else:
     if myrank == 0:
         print ' Trailing vertex deviation =', lvt
 
-
-
+nrows = 3
+ncols = 3
 if myrank == 0:
+    # plot d vs. U
+    plt.subplot(nrows, ncols, 1)
+    plt.errorbar(darmv_mean[sindxarm], uradv_mean[sindxarm],
+        xerr=darmv_std[sindxarm], yerr=uradv_std[sindxarm], fmt='.', \
+                 marker='.', ms=0.5)
+    plt.xlabel(r"d (kpc)", fontsize=12, fontname="serif")
+    plt.ylabel(r"U (km/s)", fontsize=12, fontname="serif")
+    plt.axis([-warm, warm, -80.0, 80.0], 'scaled')
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+    # plot d vs. V
+    # plt.subplot(gs1[1])
+    plt.subplot(nrows, ncols, 2)
+    plt.errorbar(darmv_mean, vrotv_mean, \
+        xerr=darmv_std, yerr=vrotv_std, fmt='.', \
+                 marker='.', ms=0.5)
+    plt.xlabel(r"d (kpc)", fontsize=12, fontname="serif")
+    plt.ylabel(r"V (km/s)", fontsize=12, fontname="serif")
+    plt.axis([-warm, warm, -80.0, 80.0], 'scaled')
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+
     # bottom panel
     # U hist
     # gs2=gridspec.GridSpec(1,3)
