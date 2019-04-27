@@ -31,7 +31,7 @@ myrank = comm.Get_rank()
 
 # flags
 # if including RVS data
-RVS = False
+RVS = True
 # True: MC sampling on, otherwise no MC or XD
 MCsample = False
 # True: read star_error*.npy
@@ -61,8 +61,8 @@ zsun = 0.025
 # condition to select stars 
 e_plxlim = 0.15
 zmaxlim = 0.5
-glonlow = 0.0
-glonhigh = 360.0
+glonlow = 105.0
+glonhigh = 135.0
 vloserrlim = 5.0
 # minimum plx
 plxlim=0.001
@@ -75,7 +75,7 @@ if myrank == 0:
 # RVS data
 # infilel0 = 'DR2/RVSl0-30z05-result.fits'
 # infilel0 = 'DR2/RVSl60-90z05-result.fits'
-# infilel0 = 'DR2/RVSl120-150z05-result.fits'
+infilel0 = 'DR2/RVSl120-150z05-result.fits'
 # infilel0 = 'DR2/RVSl180-210z05-result.fits'
 # infilel0 = 'DR2/RVSl240-270z05-result.fits'
 # infilel0 = 'DR2/RVSl300-330z05-result.fits'
@@ -85,10 +85,10 @@ if myrank == 0:
 # infilel0 = 'DR2/MG152l120-150z05-result.fits'
 # infilel0 = 'DR2/MG152l180-210z05-result.fits'
 # infilel0 = 'DR2/MG152l240-270z05-result.fits'
-infilel0 = 'DR2/MG152l300-330z05-result.fits'
+# infilel0 = 'DR2/MG152l300-330z05-result.fits'
 starl0 = pyfits.open(infilel0)
 # infilel1 = 'DR2/RVSl30-60z05-result.fits'
-# infilel1 = 'DR2/RVSl90-120z05-result.fits'
+infilel1 = 'DR2/RVSl90-120z05-result.fits'
 # infilel1 = 'DR2/RVSl150-180z05-result.fits'
 # infilel1 = 'DR2/RVSl210-240z05-result.fits'
 # infilel1 = 'DR2/RVSl270-300z05-result.fits'
@@ -98,7 +98,7 @@ starl0 = pyfits.open(infilel0)
 # infilel1 = 'DR2/MG152l150-180z05-result.fits'
 # infilel1 = 'DR2/MG152l210-240z05-result.fits'
 # infilel1 = 'DR2/MG152l270-300z05-result.fits'
-infilel1 = 'DR2/MG152l330-360z05-result.fits'
+# infilel1 = 'DR2/MG152l330-360z05-result.fits'
 starl1 = pyfits.open(infilel1)
 nrowsl0 = starl0[1].data.shape[0]
 nrowsl1 = starl1[1].data.shape[0]
@@ -390,6 +390,8 @@ if MCsample == True:
 if RVS == True:
     # Vrot defined w.r.t. solar velocity
     vrots_obs -= vcircsun
+
+
 
 # output velocity dispersion of the sample
 if myrank == 0:

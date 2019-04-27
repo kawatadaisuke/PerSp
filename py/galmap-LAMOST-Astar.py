@@ -47,8 +47,8 @@ glat=Tllbb[:,1]
 sindx=np.where((star['teff']>7330.0) & (star['teff']<8040.0) \
                & (star['logg']>3.2) \
                & (star['Vmag']>0.0) & (star['Bmag']>0.0) \
-               & (star['rv_err']>0.0) & (star['rv_err']<10.0) \
-               & (glon>140.0) & (glon<220.0))
+               & (star['rv_err']>0.0) & (star['rv_err']<10.0))
+#               & (glon>140.0) & (glon<220.0))
 #               & (glon>175.0) & (glon<185.0))
 
 nstars=len(star['ra'][sindx])
@@ -70,6 +70,9 @@ glat_s=glat[sindx]
 # absolute R mag
 mvmag_s=np.interp(teff_s,teffmv,mvmag)
 # extinction
+# using mwdust 
+# need to do 
+# > export DUST_DIR=/Users/dkawata/work/pops/mwdust/DUST_DATA
 combined=mwdust.Combined15(filter='CTIO V')
 avmag=np.zeros_like(glon_s)
 mod0_s=vmag_s-mvmag_s+avmag

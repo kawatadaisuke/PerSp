@@ -131,19 +131,23 @@ if myrank == 0:
 
 # Glon range
 if SGlon == 0:
-    print ' Selected l range = 105 - 135'
+    if myrank == 0:
+        print ' Selected l range = 105 - 135'
     glonlow = 105
     glonhigh = 135
 elif SGlon == 1:
-    print ' Selected l range = 135 - 165'
+    if myrank == 0:
+        print ' Selected l range = 135 - 165'
     glonlow = 135
     glonhigh = 165
 elif SGlon == 2:
-    print ' Selected l range = 165 - 195'
+    if myrank == 0:
+        print ' Selected l range = 165 - 195'
     glonlow = 165
     glonhigh = 195
 else:
-    print ' Selected l range = 195 - 225'
+    if myrank == 0:
+        print ' Selected l range = 195 - 225'
     glonlow = 195
     glonhigh = 225
 
@@ -665,7 +669,6 @@ else:
         print ' U corrcoef =', ucorrcoef
         print ' V corrcoef =', vcorrcoef
 
-
 # leading and training
 # leading and training
 # dleadmax = -0.2
@@ -943,4 +946,5 @@ if myrank == 0:
     plt.clf()
     plt.close()
 
+comm.Barrier()
 comm.Disconnect()
